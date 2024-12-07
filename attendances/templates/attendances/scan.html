@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>QR Skener</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        #loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>QR Skener</h1>
+    <div>
+        <label for="employee-id">ID Zaměstnance:</label>
+        <input type="number" id="employee-id" placeholder="Zadejte vaše ID">
+    </div>
+    <div id="reader" style="width: 300px; height: 300px; border: 1px solid black; margin-top: 20px;"></div>
+    <div id="loading">Odesílám požadavek...</div>
+
+    <script>
+        // Proměnná pro blokování opakovaného odesílání
+        let isProcessing = false;
+
+        // Funkce volaná po úspěšném skenování QR kódu
+        function onScanSuccess(decodedText, decodedResult) {
+            // Blokování opakovaného odeslání
+            if (isProcessing) return;
+            isProcessing = true;
+
+            console.log(`Naskenovaný text: ${decodedText}`);
+
+            // Extrakce dat z QR kódu
+            const urlParts = decodedText.split('/');
+            const action = urlParts[urlParts.length - 2]; // 'checkin' nebo 'checkout'
+            const clientId = urlParts[urlParts.length - 1]; // ID klienta
+
+            // Získání ID zaměstnance z inputu
+            const employeeId = document.getElementById('employee-id').value;
+
+            // Validace ID zaměstnance
+            if (!employeeId) {
+                alert('Prosím, zadejte vaše ID zaměstnance.');
+                isProcessing = false;
+                return;
+            }
+
+            // Zobrazení indikátoru načítání
+            document.getElementById('loading').style.display = 'block';
+
+            // Deaktivace skeneru
+            html5QrCode.stop().then(() => {
+                console.log("Skener deaktivován.");
+
+                // Odeslání požadavku na server
+                fetch('/attendances/record/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        type: action,        // 'checkin' nebo 'checkout'
+                        client_id: clientId, // ID klienta
+                        employee_id: employeeId, // ID zaměstnance
+                    }),
+                })
+                .then(async response => {
+            const data = await response.json(); // Odpověď serveru jako JSON
+
+            if (response.ok) {
+                alert(data.message); // Úspěšná akce
+            } else {
+                // Zpracování chybové zprávy
+                alert(`Chyba: ${data.error || 'Něco se pokazilo.'}`);
+            }
+        })
+                .catch(error => {
+                    console.error('Chyba při komunikaci se serverem:', error);
+                    alert('Nepodařilo se komunikovat se serverem.');
+                })
+                .finally(() => {
+                    // Skrytí indikátoru načítání
+                    document.getElementById('loading').style.display = 'none';
+
+                    // Restartování skeneru
+                    html5QrCode.start(
+                        { facingMode: "environment" }, 
+                        { fps: 10, qrbox: 250 },
+                        onScanSuccess
+                    ).then(() => {
+                        console.log("Skener znovu aktivován.");
+                    }).catch(err => {
+                        console.error("Chyba při restartu skeneru:", err);
+                    });
+
+                    // Odblokování dalšího zpracování
+                    isProcessing = false;
+                });
+            }).catch(err => {
+                console.error("Chyba při deaktivaci skeneru:", err);
+                isProcessing = false;
+            });
+        }
+
+        // Inicializace QR skeneru
+        const html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start(
+            { facingMode: "environment" }, // Použití zadní kamery
+            { fps: 10, qrbox: 250 },      // Nastavení obnovovací frekvence a velikosti oblasti
+            onScanSuccess                 // Callback po úspěšném skenu
+        ).catch(err => {
+            console.error("Chyba při inicializaci QR skeneru:", err);
+        });
+    </script>
+</body>
+</html>
