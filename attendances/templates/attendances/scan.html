@@ -25,6 +25,120 @@
     <div id="loading">Odesílám požadavek...</div>
 
     <script>
+        let isProcessing = false;
+
+        function onScanSuccess(decodedText, decodedResult) {
+            if (isProcessing) return;
+            isProcessing = true;
+
+            console.log(`Naskenovaný text: ${decodedText}`);
+
+            const urlParts = decodedText.split('/');
+            const action = urlParts[urlParts.length - 2]; // 'checkin' nebo 'checkout'
+            const clientId = urlParts[urlParts.length - 1]; // ID klienta
+            const employeeId = document.getElementById('employee-id').value;
+
+            if (!employeeId) {
+                alert('Prosím, zadejte vaše ID zaměstnance.');
+                isProcessing = false;
+                return;
+            }
+
+            const timestamp = new Date().toISOString(); // Aktuální čas v ISO 8601
+
+            document.getElementById('loading').style.display = 'block';
+
+            html5QrCode.stop().then(() => {
+                console.log("Skener deaktivován.");
+
+                fetch('/attendances/record/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        type: action,
+                        client_id: clientId,
+                        employee_id: employeeId,
+                        timestamp: timestamp, // Přidání timestampu
+                    }),
+                })
+                .then(async response => {
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        alert(data.message || 'Úspěšná akce!');
+                    } else {
+                        alert(`Chyba: ${data.error || 'Něco se pokazilo.'}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Chyba při komunikaci se serverem:', error);
+                    alert('Nepodařilo se komunikovat se serverem.');
+                })
+                .finally(() => {
+                    document.getElementById('loading').style.display = 'none';
+
+                    html5QrCode.start(
+                        { facingMode: "environment" },
+                        { fps: 10, qrbox: 250 },
+                        onScanSuccess
+                    ).then(() => {
+                        console.log("Skener znovu aktivován.");
+                    }).catch(err => {
+                        console.error("Chyba při restartu skeneru:", err);
+                    });
+
+                    isProcessing = false;
+                });
+            }).catch(err => {
+                console.error("Chyba při deaktivaci skeneru:", err);
+                isProcessing = false;
+            });
+        }
+
+        const html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: 250 },
+            onScanSuccess
+        ).catch(err => {
+            console.error("Chyba při inicializaci QR skeneru:", err);
+        });
+    </script>
+</body>
+</html>
+
+
+
+<!--
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>QR Skener</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        #loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>QR Skener</h1>
+    <div>
+        <label for="employee-id">ID Zaměstnance:</label>
+        <input type="number" id="employee-id" placeholder="Zadejte vaše ID">
+    </div>
+    <div id="reader" style="width: 300px; height: 300px; border: 1px solid black; margin-top: 20px;"></div>
+    <div id="loading">Odesílám požadavek...</div>
+
+    <script>
         // Proměnná pro blokování opakovaného odesílání
         let isProcessing = false;
 
@@ -120,3 +234,4 @@
     </script>
 </body>
 </html>
+-->
